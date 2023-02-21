@@ -17,6 +17,7 @@ from pykdtree.kdtree import KDTree
 # from importlib.resources import path
 
 class Inpaint3D():
+    # load obj, plane segementation, find_related_idx
     def __init__(self,objname) -> None:
         self.objname = objname
         self.pvmesh = None
@@ -64,6 +65,9 @@ class Inpaint3D():
     
     def locate_plane(self):
         #
+        pass
+    def path_pick(self):
+
         pass
     def plane_function(self):
         #calculate plane function with most inliner points
@@ -125,30 +129,38 @@ if __name__ == "__main__":
         pl.add_mesh(mesh, style='wireframe', color='r')
         pl.add_point_labels(point, [f"{point[0]:.2f}, {point[1]:.2f}, {point[2]:.2f}"])
         stored_points.append(point)
-    inpaint = Inpaint3D("./user_input/textured_output.obj")
+    data = './data/'
+    inpaint = Inpaint3D(f"{data}user_input/textured_output.obj")
     inpaint.load_obj()
     inpaint.plane_segementation()
-    tex1 = pv.read_texture("textured_output.jpg")
-    pl = pv.Plotter()
-    pl.add_mesh(inpaint.pvmesh,texture=tex1)
-    pl.enable_path_picking()
-    pl.show()
-    path_points = pl.picked_path.points.astype(np.double)
-    id_for_points = np.zeros((path_points.shape[0],4))
-    id_for_points[:,:-1] = path_points
-    print(f"inpaint.segments {inpaint.segments}")
-    for ii, i in enumerate(path_points):
-        for jj in range(40):
-            # print(f"{jj}, {j}")
-            if i in np.asarray(inpaint.segments[jj].points):
-                print('--------------------------------')
-                id_for_points[ii,3] = jj
-    print(id_for_points)
+
+    # pv is used for visualization
+    tex1 = pv.read_texture(f"{data}textured_output.jpg")
 
 
-    kd_tree = KDTree(inpaint.pvmesh.points.astype(np.double))
+    
 
-    points_seg_1 = np.asarray(inpaint.segments[0].points)
+    """Test Path Picking"""
+    # pl = pv.Plotter()
+    # pl.add_mesh(inpaint.pvmesh,texture=tex1)
+    # pl.enable_path_picking()
+    # pl.show()
+    # path_points = pl.picked_path.points.astype(np.double) # savev picked path
+    # id_for_points = np.zeros((path_points.shape[0],4))
+    # id_for_points[:,:-1] = path_points
+    # print(f"inpaint.segments {inpaint.segments}")
+    # for ii, i in enumerate(path_points):
+    #     for jj in range(40):
+    #         # print(f"{jj}, {j}")
+    #         if i in np.asarray(inpaint.segments[jj].points):
+    #             print('--------------------------------')
+    #             id_for_points[ii,3] = jj
+    # print(id_for_points)
+
+    """kd_tree is used to find all related trainagles and indexs - To make it more complete """
+    seg_id = 0
+    kd_tree = KDTree(inpaint.pvmesh.points.astype(np.double)) 
+    points_seg_1 = np.asarray(inpaint.segments[seg_id].points)
     # o3d.visualization.draw_geometries([inpaint.segments[0]])
     # idx = inpaint.pvmesh.find_closest_cell(points_seg_1)
     dist, idx = kd_tree.query(points_seg_1,k=5)
@@ -158,22 +170,30 @@ if __name__ == "__main__":
     mesh2 = inpaint.pvmesh.extract_cells(newid)
     sfc = mesh2.extract_surface()
 
-    
+    """sfc is the extracted first segment plane"""
     sfc.compute_normals(cell_normals=True, point_normals=False, inplace=True)
     print(f"sfc {sfc}")
     avg_norm = np.mean(sfc['Normals'],axis=0)
     print(f"avg_norm {avg_norm}")
-    tex1 = pv.read_texture("textured_output.jpg")
+    tex1 = pv.read_texture(f"{data}textured_output.jpg")
+
+
+ 
+
+    # tex1 = pv.read_texture("textured_output.jpg")
+    """Pick 4 Points for a rectangle area"""
+
     pl = pv.Plotter()
     pl.add_mesh(sfc,texture=tex1)
     pl.enable_point_picking(callback=callback, left_clicking=True, show_point=False)
-    
     # a = []
     # a.append()
     # print
 
     """
-    plane function -> interpolate -> create vertices
+    plane function: Use avg_norm and points to create plane function
+    -> interpolate: interpolate a squared area in four border points
+    -> create vertices: 
     """
     
 
@@ -182,8 +202,10 @@ if __name__ == "__main__":
 
     pl = pv.Plotter()
     pl.add_mesh(sfc,texture=tex1)
-    pl.camera.enable_parallel_projection()
+    pl.camera.enable_parallel_projection() # orthogonal projection is used to transfer 3D to 2D using avg_norm
     pl.camera.position =  tmp
+    pl.set_background('white')
+
     pl.show(screenshot=f"original_1.png")
     pl = pv.Plotter()
     pl.add_mesh(sfc,texture=tex1,opacity=0.0)
@@ -193,9 +215,156 @@ if __name__ == "__main__":
     # stored_point_np = np.append(stored_point_np,stored_points[0])
     rectangle = pv.Rectangle([stored_point_np[0], stored_point_np[1], stored_point_np[2], stored_point_np[3]])
     # pl.add_lines(stored_point_np,color='yellow', width=5)
-    pl.add_mesh(rectangle,color='yellow')
+    pl.add_mesh(rectangle,color='black')
     # pl.show()
+    
+    
+    pl.set_background('white')
+
     pl.show(screenshot=f"yellow_1.png")
+    # used the stored points to generate mask
+
+
+    print(f"stored_point_np\n {stored_point_np}")
+
+    c = avg_norm[0] *stored_point_np[0,0] + avg_norm[1] *stored_point_np[0,1] + avg_norm[2] *stored_point_np[0,2] 
+
+    min_p = np.min(stored_point_np,axis=0)
+    max_p = np.max(stored_point_np,axis=0)
+    std = np.std(stored_point_np,axis=0)
+    print(f"std {std}")
+    print(f"min_p.shape {min_p.shape}")
+
+    n = 20
+    # + np.random.uniform(-5, 5, size=n)
+    # + np.random.uniform(-std[0], std[0], size=n)
+    """create clip mesh"""
+    # avg_norm
+    # create cube
+    x_center = np.mean([min_p[0],max_p[0]])
+    y_center = np.mean([min_p[1],max_p[1]])
+
+    z_center = np.mean([min_p[2],max_p[2]])
+    x_len =  max_p[0] - min_p[0] 
+    y_len =  max_p[1] - min_p[1] 
+    z_len =  max_p[2] - min_p[2] 
+    # clip_cube = pv.Cube(center=(x_center,y_center,z_center),x_length=x_len,y_length=y_len,z_length=z_len)
+    # select = inpaint.pvmesh.select_enclosed_points(clip_cube)
+
+    # # clipped_mesh = inpaint.pvmesh.clip_box(clip_cube,invert=False)
+    # # clip_area = [min_p[0],max_p[0],min_p[1],max_p[1],min_p[2],max_p[2]]
+    # # clipped_mesh = inpaint.pvmesh.clip_box(clip_area,invert=False)
+    # pl=pv.Plotter()
+    # pl.add_mesh(select,color="red")
+
+    # # pl.add_mesh(inpaint.pvmesh,texture=tex1)
+    # print(f"show clipped")
+    # pl.show()
+
+    
+
+    # cube_center = 
+
+    x = np.linspace(min_p[0], max_p[0], num=n) 
+    y = np.linspace(min_p[1], max_p[1], num=n)
+    z = np.linspace(min_p[2], max_p[2], num=n)
+    xx1,yy1,zz1 = np.meshgrid(x, y, z)
+
+    # calculate plane function and learn a gaussian distribution
+
+
+    # project_points_to_plane
+
+    points = np.c_[xx1.reshape(-1), yy1.reshape(-1), zz1.reshape(-1)]
+    # points[0:5, :]
+    print(f"points.shape {points.shape}")
+    cloud  = pv.PolyData(points)
+    # cloud = pv.StructuredGrid(xx1,yy1,zz1)
+    # cloud.plot(point_size=15)
+    cloud.plot()
+    # surf = cloud
+    surf = cloud.delaunay_2d(inplace=True) # create surface plane with plane pointcloud
+    pp = surf.points.astype(np.double)
+    print(pp)
+    tex = pv.read_texture("generated_texture3.png")
+    # tex = examples.download_puppy_texture()
+    # axial_num_puppies = 4
+    # xc = np.linspace(0, axial_num_puppies, surf.dimensions[0])
+    # yc = np.linspace(0, axial_num_puppies, surf.dimensions[1])
+    # zc = np.linspace(0, axial_num_puppies, surf.dimensions[2])
+    # xxc, yyc, zzc = np.meshgrid(xc, yc,zc)
+    # puppy_coords = np.c_[yyc.ravel(), xxc.ravel(),zzc.ravel()]
+    # surf.active_t_coords = puppy_coords
+
+    # surf.texture_map_to_plane(origin=pp[-5,:],point_u=pp[0,:],point_v=pp[-1,:],inplace=True)
+    surf.texture_map_to_plane(origin=pp[-20,:],point_u=pp[0,:],point_v=pp[-1,:],inplace=True)
+    surf.plot(show_edges=False,texture=tex)
+
+
+    """Run again"""
+    stored_points =[]
+    seg_id = 1
+    kd_tree = KDTree(inpaint.pvmesh.points.astype(np.double)) 
+    points_seg_1 = np.asarray(inpaint.segments[seg_id].points)
+    # o3d.visualization.draw_geometries([inpaint.segments[0]])
+    # idx = inpaint.pvmesh.find_closest_cell(points_seg_1)
+    dist, idx = kd_tree.query(points_seg_1,k=5)
+    allidx = np.unique(idx)
+    ids = inpaint.findallidx(allidx)
+    newid = interp(list(ids),thre=1)
+    mesh2 = inpaint.pvmesh.extract_cells(newid)
+    sfc = mesh2.extract_surface()
+
+    """sfc is the extracted first segment plane"""
+    sfc.compute_normals(cell_normals=True, point_normals=False, inplace=True)
+    print(f"sfc {sfc}")
+    avg_norm = np.mean(sfc['Normals'],axis=0)
+    print(f"avg_norm {avg_norm}")
+    tex1 = pv.read_texture(f"{data}textured_output.jpg")
+
+    # tex1 = pv.read_texture("textured_output.jpg")
+    """Pick 4 Points for a rectangle area"""
+
+    pl = pv.Plotter()
+    pl.add_mesh(sfc,texture=tex1)
+    pl.enable_point_picking(callback=callback, left_clicking=True, show_point=False)
+    # a = []
+    # a.append()
+    # print
+
+    """
+    plane function: Use avg_norm and points to create plane function
+    -> interpolate: interpolate a squared area in four border points
+    -> create vertices: 
+    """
+    
+
+    tmp = avg_norm.ravel()
+    pl.show()
+
+    pl = pv.Plotter()
+    pl.add_mesh(sfc,texture=tex1)
+    pl.camera.enable_parallel_projection() # orthogonal projection is used to transfer 3D to 2D using avg_norm
+    pl.camera.position =  tmp
+    pl.set_background('white')
+
+    pl.show(screenshot=f"original_1.png")
+    pl = pv.Plotter()
+    pl.add_mesh(sfc,texture=tex1,opacity=0.0)
+    pl.camera.enable_parallel_projection()
+    pl.camera.position =  tmp
+    stored_point_np = np.array(stored_points)
+    # stored_point_np = np.append(stored_point_np,stored_points[0])
+    rectangle = pv.Rectangle([stored_point_np[0], stored_point_np[1], stored_point_np[2], stored_point_np[3]])
+    # pl.add_lines(stored_point_np,color='yellow', width=5)
+    pl.add_mesh(rectangle,color='black')
+    # pl.show()
+    
+    
+    pl.set_background('white')
+
+    pl.show(screenshot=f"yellow_1.png")
+    # used the stored points to generate mask
 
 
     print(f"stored_point_np\n {stored_point_np}")
@@ -216,6 +385,8 @@ if __name__ == "__main__":
     z = np.linspace(min_p[2], max_p[2], num=n)
     xx1,yy1,zz1 = np.meshgrid(x, y, z)
 
+    # calculate plane function and learn a gaussian distribution
+
 
     # project_points_to_plane
 
@@ -227,10 +398,12 @@ if __name__ == "__main__":
     # cloud.plot(point_size=15)
     cloud.plot()
     # surf = cloud
-    surf = cloud.delaunay_2d(inplace=True)
-    pp = surf.points.astype(np.double)
+    surf2 = cloud.delaunay_2d(inplace=True) # create surface plane with plane pointcloud
+    pp = surf2.points.astype(np.double)
     print(pp)
-    tex = pv.read_texture("generated_texture3.png")
+    print(pp.shape)
+
+    tex2 = pv.read_texture("5.png")
     # tex = examples.download_puppy_texture()
     # axial_num_puppies = 4
     # xc = np.linspace(0, axial_num_puppies, surf.dimensions[0])
@@ -240,8 +413,11 @@ if __name__ == "__main__":
     # puppy_coords = np.c_[yyc.ravel(), xxc.ravel(),zzc.ravel()]
     # surf.active_t_coords = puppy_coords
 
-    # surf.texture_map_to_plane(origin=pp[-5,:],point_u=pp[0,:],point_v=pp[-1,:],inplace=True)
-    surf.texture_map_to_plane(origin=pp[-20,:],point_u=pp[0,:],point_v=pp[-1,:],inplace=True)
+    surf2.texture_map_to_plane(origin=pp[0,:],point_u=pp[400,:],point_v=pp[-20,:],inplace=True)
+    # surf2.texture_map_to_plane(origin=pp[:,-20],point_u=pp[:,0],point_v=pp[:,-1],inplace=True)
+
+
+
 
     # surf.plot(show_edges=True,texture=tex)
 
@@ -270,7 +446,8 @@ if __name__ == "__main__":
     # # tex = examples.download_masonry_texture()
     # tex = pv.read_texture("generated_texture.png")
     # surf.texture_map_to_plane(inplace=True)
-    surf.plot(show_edges=False,texture=tex)
+    surf2.plot(show_edges=False,texture=tex)
+
     pl = pv.Plotter()
    
     pl.add_mesh(sfc,texture=tex1,opacity=0.3)
@@ -278,10 +455,18 @@ if __name__ == "__main__":
     pl.camera.position =  tmp
     # pl.enable_point_picking(callback=callback, left_clicking=True, show_point=False)
 
+
     pl.add_mesh(surf,texture=tex)
+    pl.add_mesh(surf2,texture=tex2)
+
+
+    pl.add_mesh(inpaint.pvmesh,texture=tex1)
     
     # pl.show()
+    pl.set_background('white')
     pl.show(screenshot=f"results1.png")
+
+
     # surf.plot(show_edges=True,texture=tex)
 
 
