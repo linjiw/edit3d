@@ -46,7 +46,7 @@ class Inpaint3D():
         for i in range(max_plane_idx):
             sgmt_idxs = []
             colors = plt.get_cmap("tab20")(i)
-            segment_models[i], inliers = rest.segment_plane(distance_threshold=0.02,ransac_n=3,num_iterations=1000)
+            segment_models[i], inliers = rest.segment_plane(distance_threshold = 0.02,ransac_n = 3,num_iterations=1000)
             global_idx[i] = np.array(inliers)
             segments[i]=rest.select_by_index(inliers)
             labels = np.array(segments[i].cluster_dbscan(eps=d_threshold * 10, min_points=10))
@@ -59,6 +59,7 @@ class Inpaint3D():
 
             segments[i].paint_uniform_color(list(colors[:3]))
             rest.paint_uniform_color([0.6, 0.6, 0.6])
+            # print(f"len(segments[i].points) {len(segments[i].points)}")
         self.segments = segments
         return segments
         pass
@@ -229,6 +230,7 @@ if __name__ == "__main__":
 
     c = avg_norm[0] *stored_point_np[0,0] + avg_norm[1] *stored_point_np[0,1] + avg_norm[2] *stored_point_np[0,2] 
 
+    # build a rectangular points set with stored points
     min_p = np.min(stored_point_np,axis=0)
     max_p = np.max(stored_point_np,axis=0)
     std = np.std(stored_point_np,axis=0)
@@ -252,14 +254,15 @@ if __name__ == "__main__":
     select = inpaint.pvmesh.select_enclosed_points(clip_cube)
     reduced_sphere, ridx = inpaint.pvmesh.remove_points(select['SelectedPoints'].view(bool))
                         #    adjacent_cells=False)
-    
+    a = inpaint.pvmesh.extract_surface(select['SelectedPoints'].view(bool))
     # # clipped_mesh = inpaint.pvmesh.clip_box(clip_cube,invert=False)
     # # clip_area = [min_p[0],max_p[0],min_p[1],max_p[1],min_p[2],max_p[2]]
     # # clipped_mesh = inpaint.pvmesh.clip_box(clip_area,invert=False)
     pl=pv.Plotter()
     # pl.add_mesh(select,color="red")
     # pl.add_mesh(clip_cube,color="blue")
-    pl.add_points(reduced_sphere, color='r')
+    # pl.add_mesh(reduced_sphere, color="blue")
+    pl.add_mesh(a)
     # # pl.add_mesh(inpaint.pvmesh,texture=tex1)
     # print(f"show clipped")
     pl.show()
@@ -451,23 +454,24 @@ if __name__ == "__main__":
     # # surf.texture_map_to_plane(inplace=True)
     # surf2.plot(show_edges=False,texture=tex)
 
-    # pl = pv.Plotter()
+    pl = pv.Plotter()
    
-    # pl.add_mesh(sfc,texture=tex1,opacity=0.3)
-    # pl.camera.enable_parallel_projection()
-    # pl.camera.position =  tmp
-    # # pl.enable_point_picking(callback=callback, left_clicking=True, show_point=False)
+    pl.add_mesh(sfc,texture=tex1,opacity=0.3)
+    pl.camera.enable_parallel_projection()
+    pl.camera.position =  tmp
+    # pl.enable_point_picking(callback=callback, left_clicking=True, show_point=False)
 
 
-    # pl.add_mesh(surf,texture=tex)
+    pl.add_mesh(surf,texture=tex)
     # pl.add_mesh(surf2,texture=tex2)
 
 
     # pl.add_mesh(inpaint.pvmesh,texture=tex1)
-    
-    # # pl.show()
-    # pl.set_background('white')
-    # pl.show(screenshot=f"results1.png")
+    pl.add_mesh(reduced_sphere, texture=tex1)
+
+    # pl.show()
+    pl.set_background('white')
+    pl.show(screenshot=f"results1.png")
 
 
     # surf.plot(show_edges=True,texture=tex)
